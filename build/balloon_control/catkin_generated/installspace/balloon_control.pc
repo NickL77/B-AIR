@@ -1,8 +1,0 @@
-prefix=/home/cc/ee106a/fa19/class/ee106a-agg/ros_workspaces/HPB/install
-
-Name: balloon_control
-Description: Description of balloon_control
-Version: 0.0.0
-Cflags: 
-Libs: -L/home/cc/ee106a/fa19/class/ee106a-agg/ros_workspaces/HPB/install/lib 
-Requires: 

@@ -9,98 +9,88 @@ import rospy
 import tf2_ros 
 import sys
 import math
+import numpy as np
 
+from collections import deque
 from geometry_msgs.msg import Twist 
 from geometry_msgs.msg import Point 
 from geometry_msgs.msg import Vector3
 
-#robot parameters
-speed = 10 # speed 
-turn = 50 # turn 
-l = 10 # robot to fan 
-deadzone = 5# deadzone where we stop
 
-control_speed = 0 
-control_turn = 0
+class Controller():
 
-#Define the method which contains the main functionality of the node.
-def controller(pos):
-  """
-  Controls a turtlebot whose position is denoted by turtlebot_frame,
-  to go to a position denoted by target_frame
-  Inputs:
-  - turtlebot_frame: the tf frame of the AR tag on your turtlebot
-  - target_frame: the tf frame of the target AR tag
-  """
-  ################################### YOUR CODE HERE ##############
+	def __init__(self):
+  		rospy.init_node('balloon_pos')
+		self.pub = rospy.Publisher('mobile_base/commands/velocity', Twist, queue_size=10)
+  		self.sub = rospy.Subscriber('/balloon_tracker/location', Point, self.callback)
+		
+		#robot parameters
+		self.l = 50 # robot to fan 
+		self.x_deadzone = 175 # deadzone where we stop
+		self.y_deadzone = 100
 
-  #Create a publisher and a tf buffer, which is primed with a tf listener
-  pub = rospy.Publisher('mobile_base/commands/velocity', Twist, queue_size=10)
-  # TODO: check this ^
-  
+		self.x_kp = -2.0 / 100 / 6
+		self.y_kp = 2.0 / 2
+		self.x_kd = 1.5
+		self.y_kd = 0.2
 
+		self.prev_x = -1
+		self.prev_y = -1
+		self.ring_buffer_y = deque([], 5);
+		self.ring_buffer_x = deque([], 5);
 
+		self.found = False
 
+	def callback(self, pos):
+	  
+		try:
+	    
+			# translate the position of balloon in camera frame to position of the balloon in fan frame
+			
+			# calculate deltas needed to move
+			x = pos.x - self.l
+			y = pos.y
+			
+			print(x)
+			print(y)
+			
+			cdx = x - self.prev_x
+			cdy = y - self.prev_y
+			# Calculations for D controller			
+			if self.prev_x > 0 and self.prev_y > 0:
+				dx = np.mean(self.ring_buffer_x) 
+				dy = np.mean(self.ring_buffer_y)
+			else:
+				dx = 0
+				dy = 0
+			self.prev_x = x
+			self.prev_y = y
+			self.ring_buffer_x.append(cdx)
+			self.ring_buffer_y.append(cdy)
 
-  # Create a timer object that will sleep long enough to result in a 10Hz publishing rate
-  r = rospy.Rate(10) # 10hz
+			# calculate linear and angular velocity to go in the right direction
+			if abs(x) < self.x_deadzone and abs(y) < self.y_deadzone:
+				print('deadzone')
+				v = 0
+				th = 0
+			else:			
+				v = x * self.x_kp + dx * self.x_kd
+				th = (y / self.l) * self.y_kp + dy * self.y_kd
 
-  # Loop until the node is killed with Ctrl-C
-  try:
-    # Process trans to get your state error Generate a control command to send to the robot
-    
-    twist = Twist()
-    
-    # c = some constant velocity l = distance from center of robot to fan x_balloon = goal_offset[0] # x 
-    # postion of balloon in camera frame y_balloon = goal_offset[1] # y position of balloon in camera 
-    # frame
-    # # translate the position of balloon in camera frame to position of the balloon in fan frame
-    # total = x_balloon + y_balloon v = x_balloon / total w = y_balloon / total / l
-    
-  
-    x = pos.x + l
-    y = pos.y
-    #if (x**2 + y**2 < deadzone):
-    #  v = 0
-    #  th = 0
-    # else:
-    v = -1 * x / 100
-    th = (y / l) / 2
-    print(x)
-    print(y)
+			# print(v) print(th)
 
-    if abs(x) < 15 and abs(y) < 15:
-	v = 0
-	th = 0
-
-
-    # print(v) print(th)
-
-    target_speed = v * speed
-    target_turn = th * turn
-
-    twist.linear.x = v; twist.linear.y = 0; twist.linear.z = 0
-    twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = th
-    pub.publish(twist)
-    
-  except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-    print(e)
-    pass
-  # Use our rate object to sleep until it is time to publish again
+	    		twist = Twist()
+			twist.linear.x = v; twist.linear.y = 0; twist.linear.z = 0
+			twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = th
+			self.pub.publish(twist)
+			    
+	  	except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+	    		print(e)
+	    		pass
 
       
 # This is Python's sytax for a main() method, which is run by default when exectued in the shell
 if __name__ == '__main__':
-  # Check if the node has received a signal to shut down If not, run the talker method
-
-  #Run this program as a new node in the ROS computation graph called /turtlebot_controller.
-  rospy.init_node('balloon_pos')
-
-  # SUBSCRIBER FOR BALLOON MSG
-  sub = rospy.Subscriber('/balloon_tracker/location', Point, controller)
-  rospy.spin()
-  # while True:
-    # goal_offset = raw_input("linx, rotz") print(goal_offset) values_array = [float(i) for i in 
-    # goal_offset.split(" ")] print(values_array) try:
-    #   controller(values_array) except rospy.ROSInterruptException: pass
+	controller = Controller()
+  	rospy.spin()
 

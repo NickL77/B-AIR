@@ -104,7 +104,7 @@ class BalloonTracker:
 
 if __name__ == '__main__':
     balloon_tracker = BalloonTracker()
-    rospy.init_node('balloon_tracker', anonymous=True)
+    rospy.init_node('balloon_tracker', anonymous=False)
     try:
         rospy.spin()
     except KeyboardInterrupt:
