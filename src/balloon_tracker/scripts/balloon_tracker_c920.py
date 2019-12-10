@@ -18,11 +18,11 @@ class BalloonTracker:
         self.upper_green = np.array([100, 170, 100])
 
         self.balloon_pos = (-1, -1)
-        self.width = -1
-        self.height = -1
-        self.focal_length = 1.93
-        self.h_fov = math.radians(91.2)
-        self.v_fov = math.radians(65.5)
+        self.width = 640
+        self.height = 480
+        self.focal_length = 3.67
+        self.h_fov = math.radians(70.42)
+        self.v_fov = math.radians(43.3)
         self.h_image_plane = 2 * self.focal_length * math.tan(self.h_fov / 2.0)
         self.v_image_plane = 2 * self.focal_length * math.tan(self.v_fov / 2.0)
 
