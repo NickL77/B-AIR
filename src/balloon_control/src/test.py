@@ -28,7 +28,7 @@ def controller(pos):
   ################################### YOUR CODE HERE ##############
 
   #Create a publisher and a tf buffer, which is primed with a tf listener
-  pub = rospy.Publisher('/mobile_base/commands/velocity', Twist, queue_size=10)
+  pub = rospy.Publisher('red/mobile_base/commands/velocity', Twist, queue_size=10)
 
   
 
@@ -57,12 +57,12 @@ def controller(pos):
     
       # x = 
 
-      linear.x = pos[0] 
+      linear.x = 1 
       linear.y = 0
       linear.z = 0
       rotation.x = 0
       rotation.y = 0
-      rotation.z = pos[1]
+      rotation.z = .2
 
       control_command = Twist()
       control_command.linear = linear

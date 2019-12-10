@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-from sensor_msgs.msg import Image, CameraInfo
-from geometry_msgs.msg import Point
+from sensor_msgs.msg import Image, CameraInfo 
+from geometry_msgs.msg import Point 
 from cv_bridge import CvBridge, CvBridgeError
 
-import numpy as np
-import cv2
-import rospy
+import numpy as np 
+import cv2 
+import rospy 
 import math
 
 class BalloonTracker:
@@ -13,9 +13,10 @@ class BalloonTracker:
     def __init__(self):
 
         self.pub = rospy.Publisher('/balloon_tracker/location', Point, queue_size=10)
-
-        self.lower_green = np.array([0, 100, 0])
-        self.upper_green = np.array([100, 170, 100])
+	# 50 90 60
+	# 110 140 110
+        self.lower_green = np.array([0, 150, 0])
+        self.upper_green = np.array([150, 200, 150])
 
         self.balloon_pos = (-1, -1)
         self.width = 640
@@ -28,7 +29,8 @@ class BalloonTracker:
 
     def run(self):
 
-        cap = cv2.VideoCapture(2)
+        cap = cv2.VideoCapture(-1)
+	cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
         while True:
             ret, frame = cap.read()
             cv_image = frame
@@ -36,16 +38,25 @@ class BalloonTracker:
             hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2RGB)
             
             mask = cv2.inRange(hsv, self.lower_green, self.upper_green)
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+	    '''
+	    for i in range(len(cv_image)):
+		row = cv_image[i]
+		for j in range(len(row)):
+		    p = row[j]
+		    if p[1] - 10 <= p[0] or p[1] - 10 <= p[2]:
+			mask[i][j] = 0
+	    '''
+            _, contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             if len(contours) > 0 and max([cv2.contourArea(c) for c in contours]) > 100:
-                
+		print('contours found')
                 c = max(contours, key=cv2.contourArea)
                 
                 M = cv2.moments(c)
                 cX = int(M['m10'] / M['m00'])
                 cY = int(M['m01'] / M['m00'])
                 self.balloon_pos = (cX, cY)
+		print(self.balloon_pos)
 
                 cv2.circle(cv_image, (cX, cY), 7, (255, 0, 0), -1)
                 cv2.drawContours(cv_image, c, -1, (255, 0, 0), 3)
@@ -70,8 +81,11 @@ class BalloonTracker:
                 self.pub.publish(p)
 
                 print(x_offset, y_offset)
-            cv2.imshow('frame', cv_image)
-            cv2.waitKey(1)
+	    else:
+		print('no contours found')
+
+            # cv2.imshow('frame', cv_image)
+            # cv2.waitKey(1)
         
 if __name__ == '__main__':
     balloon_tracker = BalloonTracker()

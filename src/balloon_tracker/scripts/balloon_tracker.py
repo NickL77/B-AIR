@@ -77,7 +77,7 @@ class BalloonTracker:
         blur = cv2.GaussianBlur(cv_image, (5, 5), 0)
         
         mask = cv2.inRange(blur, self.lower_green, self.upper_green)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        _, contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
         if len(contours) > 0 and max([cv2.contourArea(c) for c in contours]) > 100:
             

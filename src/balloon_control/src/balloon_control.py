@@ -1,20 +1,27 @@
-#!/usr/bin/env python
-#The line above tells Linux that this file is a Python script,
-#and that the OS should use the Python interpreter in /usr/bin/env
-#to run it. Don't forget to use "chmod +x [filename]" to make
+#!/usr/bin/env python 
+#The line above tells Linux that this file is a Python script, and that the OS should 
+#use the Python interpreter in /usr/bin/env to run it. Don't forget to use "chmod +x [filename]" to make 
 #this script executable.
 
-#Import the rospy package. For an import to work, it must be specified
-#in both the package manifest AND the Python file in which it is used.
-import rospy
-import tf2_ros
+#Import the rospy package. For an import to work, it must be specified in both the package manifest AND 
+#the Python file in which it is used.
+import rospy 
+import tf2_ros 
 import sys
+import math
 
-from geometry_msgs.msg import Twist
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Twist 
+from geometry_msgs.msg import Point 
 from geometry_msgs.msg import Vector3
 
-# goal_offset should be a msg with the x,y,z coordinates of the balloon in the camera frame
+#robot parameters
+speed = 10 # speed 
+turn = 50 # turn 
+l = 10 # robot to fan 
+deadzone = 5# deadzone where we stop
+
+control_speed = 0 
+control_turn = 0
 
 #Define the method which contains the main functionality of the node.
 def controller(pos):
@@ -28,96 +35,72 @@ def controller(pos):
   ################################### YOUR CODE HERE ##############
 
   #Create a publisher and a tf buffer, which is primed with a tf listener
-  pub = rospy.Publisher('/mobile_base/commands/velocity', Twist, queue_size=10)
-  # TODO: check this ^ 
+  pub = rospy.Publisher('mobile_base/commands/velocity', Twist, queue_size=10)
+  # TODO: check this ^
   
-  #robot parameters
-  speed = 1 # speed
-  turn = 5 # turn
-  l = 100 # robot to fan
-  deadzone = 20# deadzone where we stop
-  control_speed = 0
-  control_turn = 0
 
 
-  # Create a timer object that will sleep long enough to result in
-  # a 10Hz publishing rate
+
+
+  # Create a timer object that will sleep long enough to result in a 10Hz publishing rate
   r = rospy.Rate(10) # 10hz
 
   # Loop until the node is killed with Ctrl-C
-  while not rospy.is_shutdown():
-    try:
-      # Process trans to get your state error
-      # Generate a control command to send to the robot
-      
-      twist = Twist()
-      
-      # c = some constant velocity
-      # l = distance from center of robot to fan
-      # x_balloon = goal_offset[0] # x postion of balloon in camera frame
-      # y_balloon = goal_offset[1] # y position of balloon in camera frame
-      # # translate the position of balloon in camera frame to position of the balloon in fan frame
-      # total = x_balloon + y_balloon
-      # v = x_balloon / total
-      # w = y_balloon / total / l
-      
+  try:
+    # Process trans to get your state error Generate a control command to send to the robot
     
-      x = pos.x
-      y = pos.y
-      total = x + (y / l)
-      v = x / total
-      th = (y / l) / total
+    twist = Twist()
+    
+    # c = some constant velocity l = distance from center of robot to fan x_balloon = goal_offset[0] # x 
+    # postion of balloon in camera frame y_balloon = goal_offset[1] # y position of balloon in camera 
+    # frame
+    # # translate the position of balloon in camera frame to position of the balloon in fan frame
+    # total = x_balloon + y_balloon v = x_balloon / total w = y_balloon / total / l
+    
+  
+    x = pos.x + l
+    y = pos.y
+    #if (x**2 + y**2 < deadzone):
+    #  v = 0
+    #  th = 0
+    # else:
+    v = -1 * x / 100
+    th = (y / l) / 2
+    print(x)
+    print(y)
 
-      if (x^2 + y^2 < deadzone):
-        v = 0
-        th = 0
+    if abs(x) < 15 and abs(y) < 15:
+	v = 0
+	th = 0
 
-      target_speed = v * speed
-      target_turn = th * turn
 
-      if target_speed > control_speed:
-        control_speed = min (target_speed, control_speed + .02)
-      elif target_speed < control_speed:
-        control_speed = max (target_speed, control_speed - .02)
-      else:
-        control_speed = target_speed
+    # print(v) print(th)
 
-      if target_turn > control_turn:
-        control_turn = min (target_turn, control_turn + .1)
-      elif target_turn < control_turn:
-        control_turn = max (target_turn, control_turn - .1)
-      else:
-        control_turn = target_turn
+    target_speed = v * speed
+    target_turn = th * turn
+
+    twist.linear.x = v; twist.linear.y = 0; twist.linear.z = 0
+    twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = th
+    pub.publish(twist)
+    
+  except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
+    print(e)
+    pass
+  # Use our rate object to sleep until it is time to publish again
+
       
-      twist.linear.x = control_speed; twist.linear.y = 0; twist.linear.z = 0
-      twist.angular.x = 0; twist.angular.y = 0; twist.angular.z = control_turn
-      pub.publish(twist)
-      
-    except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
-      print(e)
-      pass
-    # Use our rate object to sleep until it is time to publish again
-    r.sleep()
-
-      
-# This is Python's sytax for a main() method, which is run by default
-# when exectued in the shell
+# This is Python's sytax for a main() method, which is run by default when exectued in the shell
 if __name__ == '__main__':
-  # Check if the node has received a signal to shut down
-  # If not, run the talker method
+  # Check if the node has received a signal to shut down If not, run the talker method
 
-  #Run this program as a new node in the ROS computation graph 
-  #called /turtlebot_controller.
-  rospy.init_node('balloon_controller', anonymous=True)
+  #Run this program as a new node in the ROS computation graph called /turtlebot_controller.
+  rospy.init_node('balloon_pos')
 
   # SUBSCRIBER FOR BALLOON MSG
-  sub = rospy.Subscriber('balloon_pos', Point, controller)
+  sub = rospy.Subscriber('/balloon_tracker/location', Point, controller)
+  rospy.spin()
   # while True:
-    # goal_offset = raw_input("linx, rotz")
-    # print(goal_offset)
-    # values_array = [float(i) for i in goal_offset.split(" ")]
-    # print(values_array)
-    # try:
-    #   controller(values_array)
-    # except rospy.ROSInterruptException:
-    #   pass
+    # goal_offset = raw_input("linx, rotz") print(goal_offset) values_array = [float(i) for i in 
+    # goal_offset.split(" ")] print(values_array) try:
+    #   controller(values_array) except rospy.ROSInterruptException: pass
+
