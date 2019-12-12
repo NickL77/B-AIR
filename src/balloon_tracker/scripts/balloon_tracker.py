@@ -14,14 +14,15 @@ class BalloonTracker:
         
         rospy.Subscriber('/camera/color/image_raw', Image, self.color_callback)
         rospy.Subscriber('/camera/depth/image_rect_raw', Image, self.depth_callback)
+        #rospy.Subscriber('/camera/infra1/image_rect_raw', Image, self.camera_infra_callback)
         rospy.Subscriber('/camera/depth/camera_info', CameraInfo, self.camera_info_callback)
-
+        
         self.pub = rospy.Publisher('/balloon_tracker/location', Point, queue_size=10)
 
         self.bridge = CvBridge()
 
-        self.lower_green = np.array([0, 70, 0])
-        self.upper_green = np.array([70, 255, 70])
+        self.lower_green = np.array([0, 100, 0])
+        self.upper_green = np.array([85, 220, 85])
 
         self.balloon_pos = (-1, -1)
         self.width = -1
@@ -32,13 +33,24 @@ class BalloonTracker:
         self.h_image_plane = 2 * self.focal_length * math.tan(self.h_fov / 2.0)
         self.v_image_plane = 2 * self.focal_length * math.tan(self.v_fov / 2.0)
 
+    def camera_infra_callback(self, data):
+        print('abc')
+        infra = self.bridge.imgmsg_to_cv2(data)
+        cv2.imshow('infra', infra)
+        cv2.waitKey(1)
+
     def depth_callback(self, data):
         cv_depth = self.bridge.imgmsg_to_cv2(data)
-        color = cv2.cvtColor(cv_depth, cv2.COLOR_GRAY2RGB)
+        #color = cv2.cvtColor(cv_depth, cv2.COLOR_GRAY2RGB)
 
         if self.balloon_pos[0] > -1 and self.balloon_pos[1] > -1 and self.width > -1 and self.height > -1:
-            
+            blur = cv2.GaussianBlur(cv_depth, (15, 15), 0)
+            j = self.balloon_pos[0]
             hyp = cv_depth[self.balloon_pos[1]][self.balloon_pos[0]]
+            hyp = min(600, hyp)
+
+            #np_depth = np.array(data.data)
+            #print(np_depth.reshape((self.height, self.width)))
 
             h_pos = self.balloon_pos[0] * self.h_image_plane / self.width
             v_pos = self.balloon_pos[1] * self.v_image_plane / self.height
@@ -59,13 +71,13 @@ class BalloonTracker:
 
             self.pub.publish(p)
 
-            print(x_offset, y_offset)
+            print(x_offset, y_offset, hyp)
             
             #print(len(data.data), len(data.data[0]), cv_depth[self.balloon_pos[1]][self.balloon_pos[0]])
             #cv2.circle(color, (self.balloon_pos[0], self.balloon_pos[1]), 30, (0, 255, 0), -1)
         
-        # cv2.imshow('depth', color)
-        # cv2.waitKey(1)
+        #cv2.imshow('d', cv_depth)
+        #cv2.waitKey(1)
 
 
     def color_callback(self, data):
@@ -75,6 +87,7 @@ class BalloonTracker:
             print(e)
 
         blur = cv2.GaussianBlur(cv_image, (5, 5), 0)
+        #hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
         
         mask = cv2.inRange(blur, self.lower_green, self.upper_green)
         _, contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
@@ -95,8 +108,8 @@ class BalloonTracker:
 
             self.balloon_pos = (-1, -1)
 
-        cv2.imshow('frame', cv_image)
-        cv2.waitKey(1)
+        # cv2.imshow('frame', cv_image)
+        # cv2.waitKey(1)
 
     def camera_info_callback(self, data):
         self.width = data.width
@@ -104,7 +117,7 @@ class BalloonTracker:
 
 if __name__ == '__main__':
     balloon_tracker = BalloonTracker()
-    rospy.init_node('balloon_tracker', anonymous=False)
+    rospy.init_node('balloon_tracker')
     try:
         rospy.spin()
     except KeyboardInterrupt:
