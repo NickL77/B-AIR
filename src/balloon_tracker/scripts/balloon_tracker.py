@@ -90,7 +90,7 @@ class BalloonTracker:
         #hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
         
         mask = cv2.inRange(blur, self.lower_green, self.upper_green)
-        _, contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
         if len(contours) > 0 and max([cv2.contourArea(c) for c in contours]) > 100:
             
@@ -108,8 +108,8 @@ class BalloonTracker:
 
             self.balloon_pos = (-1, -1)
 
-        # cv2.imshow('frame', cv_image)
-        # cv2.waitKey(1)
+        cv2.imshow('frame', cv_image)
+        cv2.waitKey(1)
 
     def camera_info_callback(self, data):
         self.width = data.width
