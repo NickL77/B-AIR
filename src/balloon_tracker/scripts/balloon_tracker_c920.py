@@ -8,13 +8,14 @@ import cv2
 import rospy 
 import math
 
+# Similar idea to the realsense version with following differences:
+# image frame is grabbed from cv2 rather than a rostopic
+# statically set distance balloon is to 100 cm because we have no depth data
 class BalloonTracker:
 
     def __init__(self):
 
         self.pub = rospy.Publisher('/balloon_tracker/location', Point, queue_size=10)
-	# 50 90 60
-	# 110 140 110
         self.lower_green = np.array([0, 150, 0])
         self.upper_green = np.array([150, 200, 150])
 
@@ -38,14 +39,6 @@ class BalloonTracker:
             hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2RGB)
             
             mask = cv2.inRange(hsv, self.lower_green, self.upper_green)
-	    '''
-	    for i in range(len(cv_image)):
-		row = cv_image[i]
-		for j in range(len(row)):
-		    p = row[j]
-		    if p[1] - 10 <= p[0] or p[1] - 10 <= p[2]:
-			mask[i][j] = 0
-	    '''
             _, contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
             if len(contours) > 0 and max([cv2.contourArea(c) for c in contours]) > 100:
@@ -56,7 +49,6 @@ class BalloonTracker:
                 cX = int(M['m10'] / M['m00'])
                 cY = int(M['m01'] / M['m00'])
                 self.balloon_pos = (cX, cY)
-		print(self.balloon_pos)
 
                 cv2.circle(cv_image, (cX, cY), 7, (255, 0, 0), -1)
                 cv2.drawContours(cv_image, c, -1, (255, 0, 0), 3)

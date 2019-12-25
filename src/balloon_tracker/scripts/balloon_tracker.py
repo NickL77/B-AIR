@@ -11,19 +11,26 @@ import math
 class BalloonTracker:
 
     def __init__(self):
-        
+       
+        # Initialize Realsense Subscribers
+        # image_raw: raw bgr image to detect green balloon
+        # image_rect_raw: depth image to get distance of balloon
+        # camera_info: used to get image dimensions for calculations
         rospy.Subscriber('/camera/color/image_raw', Image, self.color_callback)
         rospy.Subscriber('/camera/depth/image_rect_raw', Image, self.depth_callback)
-        #rospy.Subscriber('/camera/infra1/image_rect_raw', Image, self.camera_infra_callback)
         rospy.Subscriber('/camera/depth/camera_info', CameraInfo, self.camera_info_callback)
         
         self.pub = rospy.Publisher('/balloon_tracker/location', Point, queue_size=10)
-
+        
+        # CvBridge is used to convert between ROS images and openCV frames
         self.bridge = CvBridge()
 
+        # Upper and lower bounds for RGB filtering
         self.lower_green = np.array([0, 100, 0])
         self.upper_green = np.array([85, 220, 85])
 
+        # Initialize variables, mainly for trig calculations to get
+        # X and Y baloon offsets
         self.balloon_pos = (-1, -1)
         self.width = -1
         self.height = -1
@@ -33,24 +40,52 @@ class BalloonTracker:
         self.h_image_plane = 2 * self.focal_length * math.tan(self.h_fov / 2.0)
         self.v_image_plane = 2 * self.focal_length * math.tan(self.v_fov / 2.0)
 
-    def camera_infra_callback(self, data):
-        print('abc')
-        infra = self.bridge.imgmsg_to_cv2(data)
-        cv2.imshow('infra', infra)
+    # Runs RGB contour filtering on color image. Sets self.balloon_pos to the X, Y
+    # position of the center of the balloon in the image
+    def color_callback(self, data):
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        except CvBridgeError as e:
+            print(e)
+
+        blur = cv2.GaussianBlur(cv_image, (5, 5), 0)
+        mask = cv2.inRange(blur, self.lower_green, self.upper_green)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+        # Check if contours found and if largest contour passes size threshold
+        if len(contours) > 0 and max([cv2.contourArea(c) for c in contours]) > 100:
+            
+            c = max(contours, key=cv2.contourArea)
+            
+            M = cv2.moments(c)
+            cX = int(M['m10'] / M['m00'])
+            cY = int(M['m01'] / M['m00'])
+            self.balloon_pos = (cX, cY)
+
+            # Drawing contour and center of contour for visualizations
+            cv2.circle(cv_image, (cX, cY), 7, (255, 0, 0), -1)
+            cv2.drawContours(cv_image, c, -1, (255, 0, 0), 3)
+
+        else:
+
+            self.balloon_pos = (-1, -1)
+
+        cv2.imshow('frame', cv_image)
         cv2.waitKey(1)
 
+    # Gets euclidian distance between camera and the point in the center of the
+    # balloon, then uses trigonometry and pinhole camera model to calculate angle
+    # offsets and then global X, Y offsets. Then publishes offsets
     def depth_callback(self, data):
         cv_depth = self.bridge.imgmsg_to_cv2(data)
-        #color = cv2.cvtColor(cv_depth, cv2.COLOR_GRAY2RGB)
 
         if self.balloon_pos[0] > -1 and self.balloon_pos[1] > -1 and self.width > -1 and self.height > -1:
             blur = cv2.GaussianBlur(cv_depth, (15, 15), 0)
             j = self.balloon_pos[0]
             hyp = cv_depth[self.balloon_pos[1]][self.balloon_pos[0]]
-            hyp = min(600, hyp)
-
-            #np_depth = np.array(data.data)
-            #print(np_depth.reshape((self.height, self.width)))
+            # remove noisy measurements, 2000+
+            # also cap error measurement so PID controller is limited
+            hyp = min(600, hyp) 
 
             h_pos = self.balloon_pos[0] * self.h_image_plane / self.width
             v_pos = self.balloon_pos[1] * self.v_image_plane / self.height
@@ -70,46 +105,6 @@ class BalloonTracker:
             p.z = z_offset = -0.69
 
             self.pub.publish(p)
-
-            print(x_offset, y_offset, hyp)
-            
-            #print(len(data.data), len(data.data[0]), cv_depth[self.balloon_pos[1]][self.balloon_pos[0]])
-            #cv2.circle(color, (self.balloon_pos[0], self.balloon_pos[1]), 30, (0, 255, 0), -1)
-        
-        #cv2.imshow('d', cv_depth)
-        #cv2.waitKey(1)
-
-
-    def color_callback(self, data):
-        try:
-            cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        except CvBridgeError as e:
-            print(e)
-
-        blur = cv2.GaussianBlur(cv_image, (5, 5), 0)
-        #hsv = cv2.cvtColor(blur, cv2.COLOR_BGR2HSV)
-        
-        mask = cv2.inRange(blur, self.lower_green, self.upper_green)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-        if len(contours) > 0 and max([cv2.contourArea(c) for c in contours]) > 100:
-            
-            c = max(contours, key=cv2.contourArea)
-            
-            M = cv2.moments(c)
-            cX = int(M['m10'] / M['m00'])
-            cY = int(M['m01'] / M['m00'])
-            self.balloon_pos = (cX, cY)
-
-            cv2.circle(cv_image, (cX, cY), 7, (255, 0, 0), -1)
-            cv2.drawContours(cv_image, c, -1, (255, 0, 0), 3)
-
-        else:
-
-            self.balloon_pos = (-1, -1)
-
-        cv2.imshow('frame', cv_image)
-        cv2.waitKey(1)
 
     def camera_info_callback(self, data):
         self.width = data.width
